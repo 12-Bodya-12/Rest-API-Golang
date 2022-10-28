@@ -1,5 +1,5 @@
 <h1 align="center">Hi there, I'm Bodya
-<img src="https://github.com/blackcater/blackcater/raw/main/images/Hi.gif" height="32"/></h1>
+<img src="https://github.com/blackcater/blackcater/raw/main/images/Hi.gif"/></h1>
 <h3 align="center">Computer science student, beginner programmer from Abkhazia <img src="https://cdn-icons-png.flaticon.com/512/164/164890.png"
 width="30" height="30"></h3>
 <h2>Information</h2>
