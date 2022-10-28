@@ -53,9 +53,9 @@ This package can be installed with the go get command:
 go-sqlite3 is cgo package. If you want to build your app using go-sqlite3, you need gcc. However, 
 after you have built and installed go-sqlite3 with <code>go install github.com/mattn/go-sqlite3</code> (which requires gcc), 
 you can build your app without relying on gcc in future.
-
-Important: because this is a CGO enabled package, you are required to set the environment variable CGO_ENABLED=1 and have a gcc compile present within your path.
-<br/>
+<br/><br/>
+<b>Important: because this is a CGO enabled package, you are required to set the environment variable CGO_ENABLED=1 and have a gcc compile present within your path.</b>
+<br/><br/>
 Full information on <a href="https://github.com/mattn/go-sqlite3">GitHub</a>
 <hr/>
 <h3>pkg gorilla/mux</h3>
