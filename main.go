@@ -2,9 +2,10 @@ package main
 
 import (
 	"database/sql"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"log"
+	"html/template"
 	"net/http"
 
 	"github.com/gorilla/mux"
@@ -17,6 +18,17 @@ func setupDB() *sql.DB {
 	statement, _ := db.Prepare("CREATE TABLE IF NOT EXISTS books (id INTEGER PRIMARY KEY, title TEXT, firstname TEXT, lastname TEXT)")
 	statement.Exec()
 	return db
+}
+
+type SignupForm struct {
+	Name     string `form:"name" binding:"required"`
+	Email    string `form:"email" binding:"required"`
+	Password string `form:"pwd" binding:"required"`
+}
+
+type LoginForm struct {
+	Email    string `form:"email" binding:"required"`
+	Password string `form:"pwd" binding:"required"`
 }
 
 type Book struct {
@@ -32,6 +44,8 @@ type JsonResponse struct {
 	Message string `json:"message"`
 }
 
+//Page navigation functions
+
 // Function for handling messages
 func printMessage(message string) {
 	fmt.Println("")
@@ -45,6 +59,8 @@ func checkErr(err error) {
 		panic(err)
 	}
 }
+
+// Create User
 
 // Get all books
 
@@ -173,27 +189,74 @@ func DeleteBook(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(response)
 }
 
+// Registration
+var tpl *template.Template
+
+func init() {
+	tpl = template.Must(template.ParseGlob("templates/*.html"))
+}
+
+func index(w http.ResponseWriter, r *http.Request) {
+	tpl.ExecuteTemplate(w, "index.html", nil)
+}
+
+func processor(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+		return
+	}
+
+	fname := r.FormValue("name")
+	femail := r.FormValue("email")
+	fpwd := r.FormValue("pwd")
+
+	d := struct {
+		Name  string
+		Email string
+		Pwd   string
+	}{
+		Name:  fname,
+		Email: femail,
+		Pwd:   fpwd + "Питер",
+	}
+
+	d.Pwd = base64.StdEncoding.EncodeToString([]byte(d.Pwd))
+
+	db := setupDB()
+	var lastInsertID int
+	err := db.QueryRow("INSERT INTO users(name, email, password) VALUES($2, $3, $4) returning id;", d.Name, d.Email, d.Pwd).Scan(&lastInsertID)
+
+	// check errors
+	checkErr(err)
+
+	tpl.ExecuteTemplate(w, "processor.html", d)
+}
+
 // Main function
 func main() {
 	// Init the mux router
-	router := mux.NewRouter()
+	r := mux.NewRouter()
+
+	// Registration
+	r.HandleFunc("/", index)
+	r.HandleFunc("/process", processor)
 
 	// Route handles & endpoints
 
 	// Get all books
-	router.HandleFunc("/books", GetBooks).Methods("GET")
+	r.HandleFunc("/books", GetBooks).Methods("GET")
 
 	// Get book by id
-	router.HandleFunc("/books/{BookID}", GetBook).Methods("GET")
+	r.HandleFunc("/books/{BookID}", GetBook).Methods("GET")
 
 	// Create a book
-	router.HandleFunc("/books/", CreateBook).Methods("PUT")
+	r.HandleFunc("/books/", CreateBook).Methods("PUT")
 
 	// Delete a specific book by the ID
-	router.HandleFunc("/books/{BookID}", DeleteBook).Methods("DELETE")
+	r.HandleFunc("/books/{BookID}", DeleteBook).Methods("DELETE")
 
 	// serve the app
-	fmt.Println("Server at 8080")
-	fmt.Println("http://127.0.0.1:8000/books")
-	log.Fatal(http.ListenAndServe(":8000", router))
+	fmt.Println("Server at 8000")
+	fmt.Println("http://localhost:8000")
+	http.ListenAndServe(":8000", r)
 }
