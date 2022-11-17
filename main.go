@@ -8,6 +8,8 @@ import (
 	"html/template"
 	"net/http"
 
+	"rest/internal/authorization"
+
 	"github.com/gorilla/mux"
 	_ "github.com/mattn/go-sqlite3"
 )
@@ -236,7 +238,7 @@ func processor(w http.ResponseWriter, r *http.Request) {
 func main() {
 	// Init the mux router
 	r := mux.NewRouter()
-
+	authorization.Auth()
 	// Registration
 	r.HandleFunc("/", index)
 	r.HandleFunc("/process", processor)
@@ -244,13 +246,13 @@ func main() {
 	// Route handles & endpoints
 
 	// Get all books
-	r.HandleFunc("/books", GetBooks).Methods("GET")
+	r.Handle("/books", authorization.CheckAuth(GetBooks)).Methods("GET")
 
 	// Get book by id
-	r.HandleFunc("/books/{BookID}", GetBook).Methods("GET")
+	r.Handle("/books/{BookID}", authorization.CheckAuth(GetBook)).Methods("GET")
 
 	// Create a book
-	r.HandleFunc("/books/", CreateBook).Methods("PUT")
+	r.Handle("/books/", authorization.CheckAuth(CreateBook)).Methods("PUT")
 
 	// Delete a specific book by the ID
 	r.HandleFunc("/books/{BookID}", DeleteBook).Methods("DELETE")
