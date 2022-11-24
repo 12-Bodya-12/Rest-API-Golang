@@ -2,26 +2,19 @@ package authorization
 
 import (
 	"database/sql"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"time"
 
 	"github.com/dgrijalva/jwt-go"
-	"github.com/gorilla/mux"
 	_ "github.com/lib/pq"
 	"github.com/shopspring/decimal"
 )
 
 var mySigningKey = []byte("grhetjetfb")
-
-const (
-	// Initialize connection constants.
-	HOST     = "localhost"
-	DATABASE = "postgres"
-	USER     = "postgres"
-	PASSWORD = "57kq10!!"
-)
 
 type Funds struct {
 	Id               int             `json:"id"`
@@ -44,11 +37,6 @@ type User struct {
 	Pwd   string `json:"pwd"`
 }
 
-var user = User{
-	Email: "1",
-	Pwd:   "1",
-}
-
 func checkError(err error) {
 	if err != nil {
 		panic(err)
@@ -56,19 +44,51 @@ func checkError(err error) {
 }
 
 // Login
-func login(w http.ResponseWriter, r *http.Request) {
+func Login(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Content-Type", "application/json")
 	var u User
 	json.NewDecoder(r.Body).Decode(&u)
-	checkLogin(u)
+
+	if CheckLogin(u) == "403 Forbidden" {
+		w.WriteHeader(403)
+		name := r.URL.Query().Get("name")
+		io.WriteString(w, fmt.Sprintf("You don't have permission to access / on this server. %s", name))
+	}
 }
 
-func checkLogin(u User) string {
+func CheckLoginDb(email string, pwd string) bool {
+	db, err := sql.Open("sqlite3", "./database/DB_Golang")
+	checkError(err)
+	rows, err := db.Query("SELECT email, password FROM users WHERE email = $1 AND password = $2", email, pwd)
+	checkError(err)
 
-	if user.Email != u.Email || user.Pwd != u.Pwd {
-		fmt.Println("NOT CORRECT")
-		err := "error"
+	var user []User
+	for rows.Next() {
+		var email string
+		var password string
+		err = rows.Scan(&email, &password)
+		user = append(user, User{Email: email, Pwd: password})
+
+		checkError(err)
+
+		if user != nil {
+			return true
+		} else {
+			return false
+		}
+
+	}
+
+	return false
+}
+
+func CheckLogin(u User) string {
+
+	Pwd := u.Pwd + "Питер"
+	pwd := base64.StdEncoding.EncodeToString([]byte(Pwd))
+	if !CheckLoginDb(u.Email, pwd) {
+		err := "403 Forbidden"
 		return err
 	}
 
@@ -88,8 +108,9 @@ func GenerateJWT() (string, error) {
 	claims := token.Claims.(jwt.MapClaims)
 
 	claims["authorized"] = true
-	claims["user"] = "Elliot Forbes"
-	claims["exp"] = time.Now().Add(time.Hour * 1000).Unix()
+	claims["user"] = "Connor Kenway"
+	// claims["exp"] = time.Now().Add(time.Hour * 1000).Unix()
+	claims["exp"] = time.Now().Add(1 * time.Minute)
 
 	tokenString, err := token.SignedString(mySigningKey)
 
@@ -105,12 +126,19 @@ func CheckAuth(endpoint func(http.ResponseWriter, *http.Request)) http.Handler {
 
 		w.Header().Set("Connection", "close")
 		defer r.Body.Close()
+		now := time.Now()
+		var access bool
 
 		if r.Header["Token"] != nil {
-			token, err := jwt.Parse(r.Header["Token"][0], func(token *jwt.Token) (interface{}, error) {
+			claims := jwt.MapClaims{}
+			_, err := jwt.ParseWithClaims(r.Header["Token"][0], claims, func(token *jwt.Token) (interface{}, error) {
 				if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 					return nil, fmt.Errorf("There was an error")
 				}
+				timeToken := claims["exp"]
+				strTime := fmt.Sprintf("%v", timeToken)
+				time2, _ := time.Parse(time.RFC3339, strTime)
+				access = (now.Before(time2))
 				return mySigningKey, nil
 			})
 
@@ -120,7 +148,10 @@ func CheckAuth(endpoint func(http.ResponseWriter, *http.Request)) http.Handler {
 				return
 			}
 
-			if token.Valid {
+			if !access {
+				w.WriteHeader(http.StatusForbidden)
+				fmt.Fprintf(w, "Not Authorized")
+			} else {
 				endpoint(w, r)
 			}
 
@@ -128,55 +159,4 @@ func CheckAuth(endpoint func(http.ResponseWriter, *http.Request)) http.Handler {
 			fmt.Fprintf(w, "Not Authorized")
 		}
 	})
-}
-
-func myRUBCurrentFunds(fundType string) []Funds {
-	var amountShares []Funds
-	var connectionString string = fmt.Sprintf("host=%s user=%s password=%s dbname=%s sslmode=disable", HOST, USER, PASSWORD, DATABASE)
-
-	db, err := sql.Open("postgres", connectionString)
-	checkError(err)
-
-	err = db.Ping()
-	checkError(err)
-	// fmt.Println("Successfully created connection to database")
-
-	rows, err := db.Query("SELECT * FROM funds WHERE type = $1 ORDER BY ticker ASC", fundType)
-	checkError(err)
-
-	for rows.Next() {
-		bk := Funds{}
-		err = rows.Scan(&bk.Id, &bk.Name, &bk.Ticker, &bk.Amount, &bk.PricePerItem, &bk.PurchasePrice, &bk.PriceCurrent, &bk.PercentChanges, &bk.YearlyInvestment, &bk.ClearMoney, &bk.DatePurchase, &bk.DateLastUpdate, &bk.Type)
-		checkError(err)
-
-		amountShares = append(amountShares, bk)
-	}
-
-	defer rows.Close()
-
-	return amountShares
-}
-
-func getRUBFundsShares(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.Header().Set("Content-Type", "application/json")
-	var ArrShares = myRUBCurrentFunds("share")
-	json.NewEncoder(w).Encode(ArrShares)
-}
-
-func Auth() {
-	fmt.Println("GO")
-
-	r := mux.NewRouter()
-	//////////////////////////////////////////////////
-	////////////////////// Login /////////////////////
-	//////////////////////////////////////////////////
-
-	r.HandleFunc("/login", login).Methods("POST")
-
-	//////////////////////////////////////////////////
-	//////////////////// GET /////////////////////////
-	//////////////////////////////////////////////////
-
-	r.Handle("/", CheckAuth(getRUBFundsShares)).Methods("GET")
 }

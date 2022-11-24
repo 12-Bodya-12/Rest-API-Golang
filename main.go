@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"html/template"
 	"net/http"
-
 	"rest/internal/authorization"
 
 	"github.com/gorilla/mux"
@@ -238,10 +237,11 @@ func processor(w http.ResponseWriter, r *http.Request) {
 func main() {
 	// Init the mux router
 	r := mux.NewRouter()
-	authorization.Auth()
+
 	// Registration
 	r.HandleFunc("/", index)
 	r.HandleFunc("/process", processor)
+	r.HandleFunc("/login", authorization.Login).Methods("POST")
 
 	// Route handles & endpoints
 
@@ -255,7 +255,7 @@ func main() {
 	r.Handle("/books/", authorization.CheckAuth(CreateBook)).Methods("PUT")
 
 	// Delete a specific book by the ID
-	r.HandleFunc("/books/{BookID}", DeleteBook).Methods("DELETE")
+	r.Handle("/books/{BookID}", authorization.CheckAuth(DeleteBook)).Methods("DELETE")
 
 	// serve the app
 	fmt.Println("Server at 8000")
